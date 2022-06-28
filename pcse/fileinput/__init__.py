@@ -14,7 +14,7 @@ For reading the new PCSE format use:
 
 from .cabo_reader import CABOFileReader
 from .cabo_weather import CABOWeatherDataProvider
-from .pcsefilereader import PCSEFileReader
+#from .pcsefilereader import PCSEFileReader
 from .xlsweatherdataprovider import ExcelWeatherDataProvider
 from .yaml_agmt_loader import YAMLAgroManagementReader
 from .csvweatherdataprovider import CSVWeatherDataProvider
