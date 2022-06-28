@@ -9,7 +9,7 @@ when creating PCSE simulation units.
 import types
 import logging
 from datetime import date
-import cPickle
+import pickle
 from collections import Counter, MutableMapping
 
 from .traitlets import (HasTraits, Any, Float, Int, Instance, Dict, Bool,
@@ -1218,23 +1218,23 @@ class WeatherDataProvider(object):
         self.logger = logging.getLogger(loggername)
 
     def _dump(self, cache_fname):
-        """Dumps the contents into cache_fname using cPickle.
+        """Dumps the contents into cache_fname using pickle.
 
         Dumps the values of self.store, longitude, latitude, elevation and description
         """
         with open(cache_fname, "wb") as fp:
             dmp = (self.store, self.elevation, self.longitude, self.latitude, self.description, self.ETmodel)
-            cPickle.dump(dmp, fp, cPickle.HIGHEST_PROTOCOL)
+            pickle.dump(dmp, fp, pickle.HIGHEST_PROTOCOL)
 
     def _load(self, cache_fname):
-        """Loads the contents from cache_fname using cPickle.
+        """Loads the contents from cache_fname using pickle.
 
         Loads the values of self.store, longitude, latitude, elevation and description
         from cache_fname and also sets the self.first_date, self.last_date
         """
 
         with open(cache_fname, "rb") as fp:
-            (store, self.elevation, self.longitude, self.latitude, self.description, ETModel) = cPickle.load(fp)
+            (store, self.elevation, self.longitude, self.latitude, self.description, ETModel) = pickle.load(fp)
 
         # Check if the reference ET from the cache file is calculated with the same model as
         # specified by self.ETmodel
