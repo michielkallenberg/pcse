@@ -11,6 +11,7 @@ the default traitlets package may be used when the `observe()` functionality on 
 """
 from traitlets_pcse import *
 import traitlets_pcse as tr
+from .util import Afgen
 
 
 class Instance(tr.Instance):
@@ -58,3 +59,16 @@ class Float(tr.Float):
         except:
             self.error(obj, value)
         return value
+
+
+class AfgenTrait(TraitType):
+    """An AFGEN table trait"""
+    default_value = Afgen([0,0,1,1])
+    into_text = "An AFGEN table of XY pairs"
+
+    def validate(self, obj, value):
+        if isinstance(value, Afgen):
+           return value
+        elif isinstance(value, Iterable):
+           return Afgen(value)
+        self.error(obj, value)
