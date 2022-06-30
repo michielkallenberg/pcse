@@ -1,6 +1,8 @@
 # -*- coding: utf-8 -*-
 from ..base import ParamTemplate, SimulationObject
-from ..base import StatesWithImplicitRatesTemplate as StateVariables
+#from ..base import StatesWithImplicitRatesTemplate as StateVariables
+from ..base import ParamTemplate, StatesTemplate, RatesTemplate, \
+     SimulationObject
 from ..decorators import prepare_rates, prepare_states
 from ..traitlets import Float, Bool
 from ..util import limit
@@ -115,7 +117,7 @@ class Lintul3Soil(SimulationObject):
         WMFAC   = Bool()        # water management (0=irrigated up to the field capacity, 1 = irrigated up to saturation)        
         ROOTDI  = Float(-99)    # initial rooting depth [m] 
 
-    class Lintul3SoilStates(StateVariables):
+    class StateVariables(StatesTemplate):
         WA      = Float(-99.)   # Amount of soil water
         WC      = Float(-99.)   # Volumetric soil water content
         TRUNOF  = Float(-99.)   # total run off
@@ -125,6 +127,17 @@ class Lintul3Soil(SimulationObject):
         TRAIN   = Float(-99.)   # total rain
         TEXPLO  = Float(-99.)   # Total Exploration
         TIRRIG  = Float(-99.)   # total irrigation
+
+    class RateVariables(RatesTemplate):
+        RWA = Float(-99.)
+        RWC = Float(-99.)
+        EXPLOR = Float(-99.)
+        EVAP = Float(-99.)
+        #TRAN = Float(-99.)
+        RUNOFF = Float(-99.)
+        IRRIG = Float(-99.)
+        RAIN = Float(-99.)
+        DRAIN = Float(-99.)
 
     # Counter for days since last rain
     DSLR  = 0
@@ -141,65 +154,77 @@ class Lintul3Soil(SimulationObject):
         self.kiosk = kiosk
         self.params = self.Parameters(parvalues)
 
-        init = self.Lintul3SoilStates.initialValues()
+        #init = self.Lintul3SoilStates.initialValues()
 
         # Initial amount of water present in the rooted depth at the start of
         # the calculations, based on the initial water content (in mm).
         self.WAI = m2mm(self.params.ROOTDI) * self.params.WCI
-        init["WA"] = self.WAI
         
         # Initialize state variables
-        self.states = self.Lintul3SoilStates(kiosk, publish=["WA", "WC"], **init)
-        self.states.initialize_rates()
+        self.states = self.StateVariables(kiosk, publish=["WA", "WC"], WA = self.WAI, WC = self.params.WCI, TRUNOF = 0,
+                                         TTRAN = 0, TEVAP = 0,  TDRAIN = 0, TRAIN = 0, TEXPLO = 0, TIRRIG = 0)
+        self.rates = self.RateVariables(kiosk, publish=[])
 
-    def _safe_get_from_kiosk(self, varname, default=0.0):
-        """
-        Get named value from the kiosk; return default if it isn't available
-        :param varname:    variable name
-        :param default:    returned if the value is not available from the kiosk
-                           (optional, default 0.) 
-        """
-        if varname in self.kiosk:
-            return self.kiosk[varname]
-        return default
+    #def _safe_get_from_kiosk(self, varname, default=0.0):
+    #    """
+    #    Get named value from the kiosk; return default if it isn't available
+    #    :param varname:    variable name
+    #    :param default:    returned if the value is not available from the kiosk
+    #                       (optional, default 0.) 
+    #    """
+    #    if varname in self.kiosk:
+    #        return self.kiosk[varname]
+    #    return default
 
     @prepare_rates
     def calc_rates(self, day, drv):
 
         # dynamic calculations
+        k = self.kiosk
         p = self.params
+        r = self.rates
         s = self.states
 
         DELT = 1.  #
 
-        ROOTD = self._safe_get_from_kiosk("ROOTD", p.ROOTDI)
-        RROOTD = self._safe_get_from_kiosk("RROOTD")
-        PEVAP = self._safe_get_from_kiosk("PEVAP", cm2mm(drv.ES0))
-        TRAN = self._safe_get_from_kiosk("TRAN")
+        if "TRAN" not in self.kiosk:
+            TRAN = 0.
+        else:
+            TRAN = k.TRAN
+
+        if "RROOTD" not in self.kiosk:
+            RROOTD  = 0.
+        else:
+            RROOTD = k.RROOTD 
+
+        ROOTD = k.ROOTD
+        #RROOTD = k.RROOTD
+        PEVAP = cm2mm(drv.ES0)
+        #TRAN = k.TRAN
         
         # Variables supplied by the weather system
-        RAIN = cm2mm(drv.RAIN)  # cm  --> mm CORRECTION FOR NON-STANDARD cm in WOFOST-WEATHER
+        r.RAIN = cm2mm(drv.RAIN)  # cm  --> mm CORRECTION FOR NON-STANDARD cm in WOFOST-WEATHER
 
         # Soil evaporation rate
-        EVAP = self._soil_evaporation(RAIN, PEVAP, ROOTD, DELT)
+        r.EVAP = self._soil_evaporation(r.RAIN, PEVAP, ROOTD, DELT)
         
         # Calling the subroutine for rates of drainage, runoff and irrigation.
-        DRAIN, RUNOFF, IRRIG = self._drainage_runoff_irrigation(RAIN, EVAP, TRAN, DELT, s.WA, ROOTD)
+        r.DRAIN, r.RUNOFF, r.IRRIG = self._drainage_runoff_irrigation(r.RAIN, r.EVAP, TRAN, DELT, s.WA, ROOTD)
 
         #  Exploration of water in soil when roots grow downward.
-        EXPLOR = m2mm(RROOTD) * p.WCSUBS
+        r.EXPLOR = m2mm(RROOTD) * p.WCSUBS
                 
-        RWA = (RAIN + EXPLOR + IRRIG)-(RUNOFF + TRAN + EVAP + DRAIN)
+        r.RWA = (r.RAIN + r.EXPLOR + r.IRRIG)-(r.RUNOFF + TRAN + r.EVAP + r.DRAIN)
 
         # Assign rate variables for associated states
-        s.rWA = RWA
-        s.rTEXPLO = EXPLOR
-        s.rTEVAP = EVAP
-        s.rTTRAN = TRAN
-        s.rTRUNOF = RUNOFF
-        s.rTIRRIG = IRRIG 
-        s.rTRAIN  = RAIN  
-        s.rTDRAIN = DRAIN
+        #s.rWA = r.RWA
+        #s.rTEXPLO =r.EXPLOR
+        #s.rTEVAP = r.EVAP
+        #s.rTTRAN = TRAN
+        #s.rTRUNOF = r.RUNOFF
+        #s.rTIRRIG = r.IRRIG 
+        #s.rTRAIN  = RAIN  
+        #s.rTDRAIN = r.DRAIN
         
         WATBAL = (s.WA + (s.TRUNOF + s.TTRAN + s.TEVAP + s.TDRAIN)
                        - (self.WAI + s.TRAIN + s.TEXPLO + s.TIRRIG))
@@ -209,13 +234,22 @@ class Lintul3Soil(SimulationObject):
 
     @prepare_states
     def integrate(self, day, delt=1.0):
+        k = self.kiosk
         s = self.states
         p = self.params
-        s.integrate(delta=1.)
+        r = self.rates
 
         # Volumetric Water content in the rootzone
-        ROOTD = self._safe_get_from_kiosk("ROOTD", p.ROOTDI)
+        ROOTD = k.ROOTD
+        s.WA += r.RWA
         s.WC = s.WA / m2mm(ROOTD)
+        s.TEXPLO += r.EXPLOR
+        s.TEVAP += r.EVAP
+        s.TTRAN += k.TRAN
+        s.TRUNOF += r.RUNOFF
+        s.TIRRIG += r.IRRIG
+        s.TRAIN += r.RAIN
+        s.TDRAIN += r.DRAIN
 
     def _drainage_runoff_irrigation(self, RAIN, EVAP, TRAN, DELT, WA, ROOTD):
         """compute rates of drainage, runoff and irrigation
