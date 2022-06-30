@@ -6,6 +6,8 @@ within the same model.
 """
 from pcse.base import SimulationObject
 from .classic_waterbalance import WaterbalanceFD, WaterbalancePP
+from .lintul3soil import Lintul3Soil_NL
+from .lintul3_n_soil import Lintul3_N_Soil, Lintul3_N_Soil_PotentialProduction
 from .npk_soil_dynamics import NPK_Soil_Dynamics, NPK_PotentialProduction
 from .n_soil_dynamics import N_PotentialProduction, N_Soil_Dynamics
 from ..traitlets import Instance
@@ -109,3 +111,24 @@ class SoilModuleWrapper_N_WLP_FD(SimulationObject):
     def integrate(self, day, delt=1.0):
         self.WaterbalanceFD.integrate(day, delt)
         self.N_Soil_Dynamics.integrate(day, delt)
+
+class Lintul3SoilModuleWrapper_N_WLP_FD(SimulationObject):
+    Lintul3_Waterbalance = Instance(SimulationObject)
+    Lintul3_N_Soil_Dynamics = Instance(SimulationObject)
+
+    def initialize(self, day, kiosk, parvalues):
+        """
+        :param day: start date of the simulation
+        :param kiosk: variable kiosk of this PCSE instance
+        :param parvalues: dictionary with parameter key/value pairs
+        """
+        self.Lintul3_Waterbalance = Lintul3Soil_NL(day, kiosk, parvalues)
+        self.Lintul3_N_Soil_Dynamics = Lintul3_N_Soil(day, kiosk, parvalues)
+
+    def calc_rates(self, day, drv):
+        self.Lintul3_Waterbalance.calc_rates(day, drv)
+        self.Lintul3_N_Soil_Dynamics.calc_rates(day, drv)
+
+    def integrate(self, day, delt=1.0):
+        self.Lintul3_Waterbalance.integrate(day, delt)
+        self.Lintul3_N_Soil_Dynamics.integrate(day, delt)
