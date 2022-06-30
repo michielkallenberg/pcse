@@ -12,7 +12,7 @@ from ..exceptions import WaterBalanceError
 cm2mm = lambda cm: 10. * cm
 m2mm = lambda x: 1000 * x
 
-class Lintul3Soil_NL(SimulationObject):
+class Lintul3Soil_PotentialGrowth(SimulationObject):
     WAI = 0.                    # Initial amount of soil moisture (cm)
 
     class Parameters(ParamTemplate):

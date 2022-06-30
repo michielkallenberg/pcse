@@ -289,7 +289,7 @@ class Lintul3(SimulationObject):
         TGROWTH = Float(-99.) # Total growth
         WDRT = Float(-99.) # weight of dead roots
         CUMPAR = Float(-99.)
-        TNSOIL = Float(-99.) # Amount of inorganic N available for crop uptake.
+        #TNSOIL = Float(-99.) # Amount of inorganic N available for crop uptake.
         TAGBM = Float(-99.) # Total aboveground biomass [g /m-2)
         NNI = Float(-99) # Nitrogen nutrition index
 
@@ -317,7 +317,7 @@ class Lintul3(SimulationObject):
         RGROWTH = Float()
         DRRT = Float()
         PAR = Float()
-        RNSOIL = Float()
+        #RNSOIL = Float()
 
 
 
@@ -331,7 +331,7 @@ class Lintul3(SimulationObject):
         self.kiosk = kiosk
         self.params = self.Parameters(parvalues)
         self.rates = self.RateVariables(self.kiosk,
-                                       publish=["PEVAP", "TRAN", "RROOTD"])
+                                       publish=["PEVAP", "TRAN", "RROOTD", "NUPTR"])
 
 
         p = self.params
@@ -353,7 +353,7 @@ class Lintul3(SimulationObject):
         self.LAII = self.params.WLVGI * ISLA
         self.states = self.StateVariables(kiosk, publish = ["LAI", "ROOTD"], ANLV = self.ANLVI, ANST = self.ANSTI, ANRT = self.ANRTI, ANSO = self.ANSOI,
                                           LAI = self.LAII, WLVG =p.WLVGI, WST = p.WSTI, WSO = p.WSOI, WRT = p.WRTLI, ROOTD = p.ROOTDI, NNI= 1., WLVD = 0., 
-                                         NUPTT = 0., NLOSSL = 0., NLOSSR = 0., TGROWTH = 0., WDRT = 0., CUMPAR = 0., TNSOIL = 0., TAGBM = 0.)
+                                         NUPTT = 0., NLOSSL = 0., NLOSSR = 0., TGROWTH = 0., WDRT = 0., CUMPAR = 0., TAGBM = 0.)
 
 
         self._connect_signal(self._on_APPLY_N, signals.apply_n)
@@ -371,6 +371,7 @@ class Lintul3(SimulationObject):
     def calc_rates(self, day, drv):
 
         p = self.params
+        k = self.kiosk
         s = self.states
         r = self.rates
 
@@ -615,7 +616,7 @@ class Lintul3(SimulationObject):
         #  uptake from the soil anymore.
         NLIMIT  = 1.0 if (DVS < p.DVSNLT) and (WC >= p.WCWP) else 0.0
 
-        r.NUPTR   = (max(0., min(NDEMTO, s.TNSOIL))* NLIMIT ) / DELT
+        r.NUPTR   = (max(0., min(NDEMTO, k.TNSOIL))* NLIMIT ) / DELT
 
         # N translocated from leaves, stem, and roots.
         RNTLV   = r.RNSO* ATNLV/ ATN
@@ -650,8 +651,8 @@ class Lintul3(SimulationObject):
 
         #  Change in inorganic N in soil as function of fertilizer
         #  input, soil N mineralization and crop uptake.
-        r.RNSOIL = self.FERTNS/DELT - r.NUPTR + p.RNMIN
-        self.FERTNS = 0.0
+        ##r.RNSOIL = self.FERTNS/DELT - r.NUPTR + p.RNMIN
+        #self.FERTNS = 0.0
 
         # # Total leaf weight.
         WLV     = s.WLVG + s.WLVD
@@ -701,7 +702,7 @@ class Lintul3(SimulationObject):
         s.TGROWTH += r.RGROWTH
         s.WDRT += r.DRRT
         s.CUMPAR += r.PAR
-        s.TNSOIL += r.RNSOIL
+        #s.TNSOIL += r.RNSOIL
 
         # Compute some derived states
         s.TAGBM = s.WLVG + s.WLVD + s.WST + s.WSO

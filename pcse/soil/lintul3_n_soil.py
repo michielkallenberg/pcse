@@ -29,11 +29,10 @@ class Lintul3_N_Soil_PotentialProduction(SimulationObject):
         self.touch()
 
 class Lintul3_N_Soil(SimulationObject):
-    NUPTR = 0.
     FERTNS = 0.
 
     class StateVariables(StatesTemplate):
-        TNSOIL2 = Float(-99.)  # total mineral N from soil and fertiliser  kg N ha-1
+        TNSOIL = Float(-99.)  # total mineral N from soil and fertiliser  kg N ha-1
 
     class Parameters(ParamTemplate):
         RNMIN = Float(-99.)
@@ -47,7 +46,7 @@ class Lintul3_N_Soil(SimulationObject):
         :param kiosk: variable kiosk of this PCSE instance
         :param cropdata: dictionary with WOFOST cropdata key/value pairs
         """
-        self.states = self.StateVariables(kiosk, publish=["TNSOIL2"], TNSOIL2=0.)
+        self.states = self.StateVariables(kiosk, publish=["TNSOIL"], TNSOIL=0.)
         self.params = self.Parameters(parvalues)
         self.rates = self.RateVariables(kiosk)
         self.kiosk = kiosk
@@ -62,7 +61,7 @@ class Lintul3_N_Soil(SimulationObject):
         k = self.kiosk
 
         DELT = 1.
-        r.RNSOIL2 = self.FERTNS/DELT - self.NUPTR + p.RNMIN
+        r.RNSOIL2 = self.FERTNS/DELT - k.NUPTR + p.RNMIN
         self.FERTNS = 0.0
 
     @prepare_states
@@ -71,7 +70,7 @@ class Lintul3_N_Soil(SimulationObject):
         states = self.states
 
         # mineral N amount in the soil
-        states.TNSOIL2 += rates.RNSOIL2
+        states.TNSOIL += rates.RNSOIL2
 
     def _on_APPLY_N(self, amount, recovery):
         """Receive signal for N application with amount the nitrogen amount in g N m-2 and
