@@ -115,6 +115,27 @@ class LINTUL3(Engine):
         Engine.__init__(self, parameterprovider, weatherdataprovider, agromanagement,
                         config=self.config)
 
+class LINTUL3_NL(Engine):
+    """The LINTUL model (Light INTerception and UtiLisation) is a simple general crop model,
+    which simulates dry matter production as the result of light interception and utilization
+    with a constant light use efficiency.
+
+    LINTUL3 simulates crop growth under water-limited and nitrogen-limited conditions
+
+    :param parameterprovider: A `ParameterProvider` object providing model
+        parameters as key/value pairs. The parameterprovider encapsulates
+        the different parameter sets for crop, soil and site parameters.
+    :param weatherdataprovider: An instance of a WeatherDataProvider that can
+        return weather data in a WeatherDataContainer for a given date.
+    :param agromanagement: AgroManagement data. The data format is described
+        in the section on agronomic management.
+    """
+    config = "Lintul3_NL.conf"
+
+    def __init__(self, parameterprovider, weatherdataprovider, agromanagement):
+        Engine.__init__(self, parameterprovider, weatherdataprovider, agromanagement,
+                        config=self.config)
+
 
 class FAO_WRSI(Engine):
     """Convenience class for computing actual crop water use using the Water Requirements

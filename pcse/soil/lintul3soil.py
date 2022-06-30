@@ -12,7 +12,7 @@ from ..exceptions import WaterBalanceError
 cm2mm = lambda cm: 10. * cm
 m2mm = lambda x: 1000 * x
 
-class Lintul3SoilPP(SimulationObject):
+class Lintul3Soil_NL(SimulationObject):
     WAI = 0.                    # Initial amount of soil moisture (cm)
 
     class Parameters(ParamTemplate):
@@ -44,9 +44,44 @@ class Lintul3SoilPP(SimulationObject):
         # the calculations, based on the initial water content (in mm) that is.
         # assumed to be equal to the amount of soil water at field capacity.
         self.WAI = m2mm(self.params.ROOTDM) * self.params.WCFC
-
-        self.states = self.StateVariables(kiosk, publish=["WA", "WC"], WA = self.WAI, WC = self.params.WCI, TRUNOF = 0,
+        self.states = self.StateVariables(kiosk, publish=["WA", "WC"], WA = self.WAI, WC = self.params.WCFC, TRUNOF = 0,
                                          TTRAN = 0, TEVAP = 0)
+        self.rates = self.RateVariables(kiosk, publish=[])
+
+    @prepare_rates
+    def calc_rates(self, day, drv):
+
+        # dynamic calculations
+        k = self.kiosk
+        p = self.params
+        r = self.rates
+        s = self.states
+
+        DELT = 1.  #
+
+        if "TRAN" not in self.kiosk:
+            TRAN = 0.
+        else:
+            TRAN = k.TRAN
+
+        PEVAP = cm2mm(drv.ES0)
+        
+        r.EVAP = PEVAP - TRAN
+        r.RWA = 0.
+        r.RWC = 0.
+
+    @prepare_states
+    def integrate(self, day, delt=1.0):
+        k = self.kiosk
+        s = self.states
+        p = self.params
+        r = self.rates
+
+        # Volumetric Water content in the rootzone
+        s.WA += r.RWA
+        s.WC += r.RWC
+        s.TEVAP += r.EVAP
+        s.TTRAN += k.TRAN
 
 
 class Lintul3Soil(SimulationObject):
@@ -233,7 +268,6 @@ class Lintul3Soil(SimulationObject):
             RROOTD = k.RROOTD 
 
         ROOTD = k.ROOTD
-        #RROOTD = k.RROOTD
         PEVAP = cm2mm(drv.ES0)
         #TRAN = k.TRAN
         
@@ -251,15 +285,6 @@ class Lintul3Soil(SimulationObject):
                 
         r.RWA = (r.RAIN + r.EXPLOR + r.IRRIG)-(r.RUNOFF + TRAN + r.EVAP + r.DRAIN)
 
-        # Assign rate variables for associated states
-        #s.rWA = r.RWA
-        #s.rTEXPLO =r.EXPLOR
-        #s.rTEVAP = r.EVAP
-        #s.rTTRAN = TRAN
-        #s.rTRUNOF = r.RUNOFF
-        #s.rTIRRIG = r.IRRIG 
-        #s.rTRAIN  = RAIN  
-        #s.rTDRAIN = r.DRAIN
         
         WATBAL = (s.WA + (s.TRUNOF + s.TTRAN + s.TEVAP + s.TDRAIN)
                        - (self.WAI + s.TRAIN + s.TEXPLO + s.TIRRIG))
