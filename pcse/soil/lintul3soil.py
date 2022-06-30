@@ -12,6 +12,43 @@ from ..exceptions import WaterBalanceError
 cm2mm = lambda cm: 10. * cm
 m2mm = lambda x: 1000 * x
 
+class Lintul3SoilPP(SimulationObject):
+    WAI = 0.                    # Initial amount of soil moisture (cm)
+
+    class Parameters(ParamTemplate):
+        WCFC    = Float(-99)    # Soil hydraulic properties
+        ROOTDM  = Float(-99)    # Maximum rooting depth
+
+    class StateVariables(StatesTemplate):
+        WA      = Float(-99.)   # Amount of soil water
+        WC      = Float(-99.)   # Volumetric soil water content
+        TTRAN   = Float(-99.)   # Crop transpiration accumulated over growth period
+        TEVAP   = Float(-99.)   # soil evaporation accumulated over growth period
+
+    class RateVariables(RatesTemplate):
+        RWA = Float(-99.)
+        RWC = Float(-99.)
+        EVAP = Float(-99.)
+
+    def initialize(self, day, kiosk, parvalues):
+        """
+        :param day: start date of the simulation
+        :param kiosk: variable kiosk of this PCSE  instance
+        :param parvalues: `ParameterProvider` object providing parameters as
+                key/value pairs
+        """
+        self.kiosk = kiosk
+        self.params = self.Parameters(parvalues)
+
+        # Initial amount of water present in the rooted depth at the start of
+        # the calculations, based on the initial water content (in mm) that is.
+        # assumed to be equal to the amount of soil water at field capacity.
+        self.WAI = m2mm(self.params.ROOTDM) * self.params.WCFC
+
+        self.states = self.StateVariables(kiosk, publish=["WA", "WC"], WA = self.WAI, WC = self.params.WCI, TRUNOF = 0,
+                                         TTRAN = 0, TEVAP = 0)
+
+
 class Lintul3Soil(SimulationObject):
     """
         * ORIGINAL COPYRIGHT NOTICE:
@@ -130,10 +167,8 @@ class Lintul3Soil(SimulationObject):
 
     class RateVariables(RatesTemplate):
         RWA = Float(-99.)
-        RWC = Float(-99.)
         EXPLOR = Float(-99.)
         EVAP = Float(-99.)
-        #TRAN = Float(-99.)
         RUNOFF = Float(-99.)
         IRRIG = Float(-99.)
         RAIN = Float(-99.)
