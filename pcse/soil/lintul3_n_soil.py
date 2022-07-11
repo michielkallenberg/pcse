@@ -38,7 +38,7 @@ class Lintul3_N_Soil(SimulationObject):
         RNMIN = Float(-99.)
 
     class RateVariables(RatesTemplate):
-        RNSOIL2 = Float(-99.)
+        RNSOIL = Float(-99.)
 
     def initialize(self, day, kiosk, parvalues):
         """
@@ -60,8 +60,13 @@ class Lintul3_N_Soil(SimulationObject):
         p = self.params
         k = self.kiosk
 
+        if "NUPTR" not in k:
+            k.NUPTR = 0.
+        else:
+            NUPTR = k.NUPTR
+
         DELT = 1.
-        r.RNSOIL2 = self.FERTNS/DELT - k.NUPTR + p.RNMIN
+        r.RNSOIL = self.FERTNS/DELT - k.NUPTR + p.RNMIN
         self.FERTNS = 0.0
 
     @prepare_states
@@ -70,7 +75,7 @@ class Lintul3_N_Soil(SimulationObject):
         states = self.states
 
         # mineral N amount in the soil
-        states.TNSOIL += rates.RNSOIL2
+        states.TNSOIL += rates.RNSOIL
 
     def _on_APPLY_N(self, amount, recovery):
         """Receive signal for N application with amount the nitrogen amount in g N m-2 and
