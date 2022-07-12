@@ -12,7 +12,7 @@ from ..base import SimulationObject, ParamTemplate, RatesTemplate
 from ..base import ParamTemplate, StatesTemplate, RatesTemplate, \
      SimulationObject
 
-from ..traitlets import Float, Instance, Bool
+from ..traitlets import Float, Instance, Bool, Int
 from ..decorators import prepare_rates, prepare_states
 from ..util import limit, AfgenTrait
 from ..crop.phenology import DVS_Phenology as Phenology
@@ -273,10 +273,17 @@ class Lintul3(SimulationObject):
         WRTLI  = Float(-99)   # Initial weight of roots
         WSOI   = Float(-99)   # Initial weight of storage organs
 
+        # Parameter added for mineralization rate
         RNMIN = Float(-99)    # Rate of soil mineratilation (g N/m2/day
+
+        # Reallocation parameters added
         REALLOC_DVS = Float(-99)
         REALLOC_FRAC = Float(-99)
         REALLOC_RATE_REL = Float(-99)
+
+        # CO2 concentration added
+        ICO2 = Int(-99)
+        CO2 = Float(-99)
         
     class StateVariables(StatesTemplate):
         LAI = Float(-99.) # leaf area index
@@ -772,7 +779,13 @@ class Lintul3(SimulationObject):
             if self._WST_REALLOC is None:
                 self._WST_REALLOC = s.WST * p.REALLOC_FRAC
             REALLOC_RATE = self._WST_REALLOC * p.REALLOC_RATE_REL
-        return REALLOC_RATE 
+        return REALLOC_RATE
+
+    def _calc_lue_corrected_for_CO2(self):
+        p = self.params
+        f_CO2 = ((- 1.7/(350* (1-1.7))) * p.CO2 * 1.7 )/ ((- 1.7/(350* (1-1.7))) * p.CO2 + 1.7 )
+        LUE_corr = p.LUE * f_CO2
+        return LUE_corr
 
     def _growth_leaf_area(self, DTEFF, LAII,  DELT, SLA, GLV, WC, DVS, TRANRF, NNI):
         """This subroutine computes daily increase of leaf area index."""
@@ -840,7 +853,12 @@ class Lintul3(SimulationObject):
         """
         p = self.params
         PARINT = 0.5 * DTR * (1.- exp(-p.K * self.states.LAI))
-        RGROWTH = p.LUE * PARINT
+
+        if(p.ICO2 == 0):
+            RGROWTH = p.LUE * PARINT
+        else:
+            LUE_CO2_corr = self._calc_lue_corrected_for_CO2()
+            RGROWTH = LUE_CO2_corr * PARINT
         
         if(TRANRF  <=  NNI):
             #  Water stress is more severe as compared to nitrogen stress and
