@@ -204,6 +204,10 @@ class Lintul3(SimulationObject):
     pheno = Instance(SimulationObject)
     # placeholder for effective N application rate from the _on_APPLY_N event handler.
     FERTNS = 0.0
+
+    # placeholder for the initial amount of reallocatable stem dry matter
+    _WST_REALLOC  = Float(None)
+
     # placeholder for initial leaf area index
     LAII = 0.
     # placeholders for initial nitrogen contents for leaves, stems, roots and storage organs
@@ -270,6 +274,9 @@ class Lintul3(SimulationObject):
         WSOI   = Float(-99)   # Initial weight of storage organs
 
         RNMIN = Float(-99)    # Rate of soil mineratilation (g N/m2/day
+        REALLOC_DVS = Float(-99)
+        REALLOC_FRAC = Float(-99)
+        REALLOC_RATE_REL = Float(-99)
         
     class StateVariables(StatesTemplate):
         LAI = Float(-99.) # leaf area index
@@ -753,6 +760,20 @@ class Lintul3(SimulationObject):
         
         return PTRAN * FR
 
+    def _calc_retranslocatable_stem_dry_matter(self):
+        k = self.kiosk
+        p = self.params
+        s = self.states
+
+        if k.DVS < p.REALLOC_DVS:
+            REALLOC_RATE = 0.
+            pass
+        else:
+            if self._WST_REALLOC is None:
+                self._WST_REALLOC = s.WST * p.REALLOC_FRAC
+            REALLOC_RATE = self._WST_REALLOC * p.REALLOC_RATE_REL
+        return REALLOC_RATE 
+
     def _growth_leaf_area(self, DTEFF, LAII,  DELT, SLA, GLV, WC, DVS, TRANRF, NNI):
         """This subroutine computes daily increase of leaf area index."""
 
@@ -837,6 +858,8 @@ class Lintul3(SimulationObject):
         and storage organs.
         Obsolete subroutine name: RELGR                   
         """
+
+        RREALLOC = self._calc_retranslocatable_stem_dry_matter()
       
         RWLVG = RGROWTH * FLV - DLV
         RWRT  = RGROWTH * FRT - DRRT
