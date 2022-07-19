@@ -307,6 +307,8 @@ class Lintul3(SimulationObject):
         TAGBM = Float(-99.) # Total aboveground biomass [g /m-2)
         NNI = Float(-99) # Nitrogen nutrition index
 
+        WREALOC = Float(-99)
+
     # These are some rates which are not directly connected to a state (PEVAP, TRAN) of which must be published
     # (RROOTD) for the water balance module. Therefore, we explicitly define them here.
     class RateVariables(RatesTemplate):
@@ -324,6 +326,7 @@ class Lintul3(SimulationObject):
         RNLDRT = Float()
         RWLVG = Float()
         DLV = Float()
+        RWREALOC = Float()
         RWST = Float()
         RWSO = Float()
         RWRT = Float()
@@ -367,7 +370,7 @@ class Lintul3(SimulationObject):
         self.LAII = self.params.WLVGI * ISLA
         self.states = self.StateVariables(kiosk, publish = ["LAI", "ROOTD"], ANLV = self.ANLVI, ANST = self.ANSTI, ANRT = self.ANRTI, ANSO = self.ANSOI,
                                           LAI = self.LAII, WLVG =p.WLVGI, WST = p.WSTI, WSO = p.WSOI, WRT = p.WRTLI, ROOTD = p.ROOTDI, NNI= 1., WLVD = 0., 
-                                         NUPTT = 0., NLOSSL = 0., NLOSSR = 0., TGROWTH = 0., WDRT = 0., CUMPAR = 0., TAGBM = 0.)
+                                         NUPTT = 0., NLOSSL = 0., NLOSSR = 0., TGROWTH = 0., WDRT = 0., CUMPAR = 0., TAGBM = 0., WREALOC = 0.)
 
 
         self._connect_signal(self._on_APPLY_N, signals.apply_n)
@@ -578,7 +581,7 @@ class Lintul3(SimulationObject):
 
         # relative totalGrowthRate rate of roots, leaves, stem
         # and storage organs.
-        r.RWLVG, r.RWRT, r.RWST, r.RWSO = self.relativeGrowthRates(r.RGROWTH, FLV, FRT, FST, FSO, r.DLV, r.DRRT)
+        r.RWLVG, r.RWRT, r.RWST, r.RWSO = self.relativeGrowthRates(r.RGROWTH, FLV, FRT, FST, FSO, r.DLV, r.DRRT, s.WREALOC)
 
 
         """
@@ -716,6 +719,7 @@ class Lintul3(SimulationObject):
         s.TGROWTH += r.RGROWTH
         s.WDRT += r.DRRT
         s.CUMPAR += r.PAR
+        s.WREALOC += r.RWREALOC
         #s.TNSOIL += r.RNSOIL
 
         # Compute some derived states
@@ -767,7 +771,7 @@ class Lintul3(SimulationObject):
         
         return PTRAN * FR
 
-    def _calc_retranslocatable_stem_dry_matter(self):
+    def _calc_retranslocatable_stem_dry_matter(self, WREALOC):
         k = self.kiosk
         p = self.params
         s = self.states
@@ -778,7 +782,8 @@ class Lintul3(SimulationObject):
         else:
             if self._WST_REALLOC is None:
                 self._WST_REALLOC = s.WST * p.REALLOC_FRAC
-            REALLOC_RATE = self._WST_REALLOC * p.REALLOC_RATE_REL
+                s.WREALLOC = self._WST_REALLOC
+            REALLOC_RATE = max(self._WST_REALLOC * p.REALLOC_RATE_REL, WREALOC)
         return REALLOC_RATE
 
     def _calc_lue_corrected_for_CO2(self):
@@ -870,19 +875,19 @@ class Lintul3(SimulationObject):
             RGROWTH *= exp(-p.NLUE * (1.0 - NNI))
         return RGROWTH
 
-    def relativeGrowthRates(self, RGROWTH, FLV, FRT, FST, FSO, DLV, DRRT):
+    def relativeGrowthRates(self, RGROWTH, FLV, FRT, FST, FSO, DLV, DRRT, WREALOC):
         """
         compute the relative totalGrowthRate rate of roots, leaves, stem 
         and storage organs.
         Obsolete subroutine name: RELGR                   
         """
-
-        RREALLOC = self._calc_retranslocatable_stem_dry_matter()
+        r = self.rates
+        r.RWREALOC = -self._calc_retranslocatable_stem_dry_matter(WREALOC)
       
         RWLVG = RGROWTH * FLV - DLV
         RWRT  = RGROWTH * FRT - DRRT
-        RWST  = RGROWTH * FST  - RREALLOC
-        RWSO  = RGROWTH * FSO + RREALLOC
+        RWST  = RGROWTH * FST  + r.RWREALOC
+        RWSO  = RGROWTH * FSO - r.RWREALOC
 
         return RWLVG, RWRT, RWST, RWSO
 
