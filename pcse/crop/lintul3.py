@@ -7,8 +7,12 @@ LINTUL3
 from math import exp
 
 from ..base import SimulationObject, ParamTemplate, RatesTemplate
-from ..base import StatesWithImplicitRatesTemplate as StateVariables
-from ..traitlets import Float, Instance, Bool
+#from ..base import StatesWithImplicitRatesTemplate as StateVariables
+
+from ..base import ParamTemplate, StatesTemplate, RatesTemplate, \
+     SimulationObject
+
+from ..traitlets import Float, Instance, Bool, Int
 from ..decorators import prepare_rates, prepare_states
 from ..util import limit, AfgenTrait
 from ..crop.phenology import DVS_Phenology as Phenology
@@ -200,6 +204,10 @@ class Lintul3(SimulationObject):
     pheno = Instance(SimulationObject)
     # placeholder for effective N application rate from the _on_APPLY_N event handler.
     FERTNS = 0.0
+
+    # placeholder for the initial amount of reallocatable stem dry matter
+    _WST_REALLOC  = Float(None)
+
     # placeholder for initial leaf area index
     LAII = 0.
     # placeholders for initial nitrogen contents for leaves, stems, roots and storage organs
@@ -265,9 +273,19 @@ class Lintul3(SimulationObject):
         WRTLI  = Float(-99)   # Initial weight of roots
         WSOI   = Float(-99)   # Initial weight of storage organs
 
+        # Parameter added for mineralization rate
         RNMIN = Float(-99)    # Rate of soil mineratilation (g N/m2/day
+
+        # Reallocation parameters added
+        REALLOC_DVS = Float(-99)
+        REALLOC_FRAC = Float(-99)
+        REALLOC_RATE_REL = Float(-99)
+
+        # CO2 concentration added
+        ICO2 = Int(-99)
+        CO2 = Float(-99)
         
-    class Lintul3States(StateVariables):
+    class StateVariables(StatesTemplate):
         LAI = Float(-99.) # leaf area index
         ANLV = Float(-99.) # Actual N content in leaves
         ANST = Float(-99.) # Actual N content in stem
@@ -285,18 +303,39 @@ class Lintul3(SimulationObject):
         TGROWTH = Float(-99.) # Total growth
         WDRT = Float(-99.) # weight of dead roots
         CUMPAR = Float(-99.)
-        TNSOIL = Float(-99.) # Amount of inorganic N available for crop uptake.
+        #TNSOIL = Float(-99.) # Amount of inorganic N available for crop uptake.
         TAGBM = Float(-99.) # Total aboveground biomass [g /m-2)
         NNI = Float(-99) # Nitrogen nutrition index
 
+        WREALOC = Float(-99)
+
     # These are some rates which are not directly connected to a state (PEVAP, TRAN) of which must be published
     # (RROOTD) for the water balance module. Therefore, we explicitly define them here.
-    class Lintul3Rates(RatesTemplate):
+    class RateVariables(RatesTemplate):
         PEVAP = Float()
         PTRAN = Float()
         TRAN = Float()
         TRANRF = Float()
+        RLAI = Float()
+        RNLV = Float()
+        RNST = Float()
+        RNRT = Float()
+        RNSO = Float()
+        NUPTR = Float()
+        RNLDLV = Float()
+        RNLDRT = Float()
+        RWLVG = Float()
+        DLV = Float()
+        RWREALOC = Float()
+        RWST = Float()
+        RWSO = Float()
+        RWRT = Float()
         RROOTD = Float()
+        RGROWTH = Float()
+        DRRT = Float()
+        PAR = Float()
+        #RNSOIL = Float()
+
 
 
     def initialize(self, day, kiosk, parvalues):
@@ -308,19 +347,11 @@ class Lintul3(SimulationObject):
         """
         self.kiosk = kiosk
         self.params = self.Parameters(parvalues)
-        self.rates = self.Lintul3Rates(self.kiosk,
-                                       publish=["PEVAP", "TRAN", "RROOTD"])
+        self.rates = self.RateVariables(self.kiosk,
+                                       publish=["PEVAP", "TRAN", "RROOTD", "NUPTR"])
 
-        self._connect_signal(self._on_APPLY_N, signals.apply_n)
 
-        # Initialize phenology component of the crop
-        self.pheno = Phenology(day, kiosk, parvalues)
-
-        # Calculate initial LAI
         p = self.params
-        SLACFI = p.SLACF(p.DVSI)
-        ISLA = p.SLAC * SLACFI
-        self.LAII = p.WLVGI * ISLA
 
         # Initial amount of N (g/m2) in leaves, stem, roots, and storage organs.
         self.ANLVI = p.NFRLVI * p.WLVGI
@@ -328,24 +359,24 @@ class Lintul3(SimulationObject):
         self.ANRTI = p.NFRRTI * p.WRTLI
         self.ANSOI = 0.0
 
-        # Generate a dict with 'default' initial states (e.g. zero)
-        init = self.Lintul3States.initialValues()
+        # initialize state variables
+        # Initial amount of N (g/m2) in leaves, stem, roots, and storage organs.
+        self.ANLVI = p.NFRLVI * p.WLVGI
+        self.ANSTI = p.NFRSTI * p.WSTI
+        self.ANRTI = p.NFRRTI * p.WRTLI
+        self.ANSOI = 0.0
+        SLACFI = self.params.SLACF(self.params.DVSI)
+        ISLA = self.params.SLAC * SLACFI
+        self.LAII = self.params.WLVGI * ISLA
+        self.states = self.StateVariables(kiosk, publish = ["LAI", "ROOTD"], ANLV = self.ANLVI, ANST = self.ANSTI, ANRT = self.ANRTI, ANSO = self.ANSOI,
+                                          LAI = self.LAII, WLVG =p.WLVGI, WST = p.WSTI, WSO = p.WSOI, WRT = p.WRTLI, ROOTD = p.ROOTDI, NNI= 1., WLVD = 0., 
+                                         NUPTT = 0., NLOSSL = 0., NLOSSR = 0., TGROWTH = 0., WDRT = 0., CUMPAR = 0., TAGBM = 0., WREALOC = 0.)
 
-        # Initialize state variables
-        init["LAI"] = self.LAII
-        init["ANLV"] = self.ANLVI
-        init["ANST"] = self.ANSTI
-        init["ANRT"] = self.ANRTI
-        init["WLVG"] = p.WLVGI
-        init["WST"] = p.WSTI
-        init["WSO"] = p.WSOI
-        init["WRT"] = p.WRTLI
-        init["ROOTD"] = p.ROOTDI
 
-        # Initialize the states objects
-        self.states = self.Lintul3States(kiosk, publish=["LAI", "ROOTD"], **init)
-        # Initialize the associated rates of the states
-        self.states.initialize_rates()
+        self._connect_signal(self._on_APPLY_N, signals.apply_n)
+
+        # Initialize phenology component of the crop
+        self.pheno = Phenology(day, kiosk, parvalues)
 
     def _on_APPLY_N(self, amount, recovery):
         """Receive signal for N application with amount the nitrogen amount in g N m-2 and
@@ -357,6 +388,7 @@ class Lintul3(SimulationObject):
     def calc_rates(self, day, drv):
 
         p = self.params
+        k = self.kiosk
         s = self.states
         r = self.rates
 
@@ -366,7 +398,7 @@ class Lintul3(SimulationObject):
         TSUM    = self.pheno.get_variable("TSUM")
 
         DTR     = joule2megajoule(drv.IRRAD)
-        PAR     = DTR * 0.50
+        r.PAR     = DTR * 0.50
         DAVTMP  = 0.5 * (drv.TMIN + drv.TMAX)
         DTEFF   = max(0., DAVTMP - p.TBASE)
         
@@ -514,19 +546,19 @@ class Lintul3(SimulationObject):
         FRT, FLV, FST, FSO = self.dryMatterPartitioningFractions(p.NPART, r.TRANRF, NNI, FRTWET, FLVT, FSTT, FSOT)
 
         # total totalGrowthRate rate.
-        RGROWTH = self.totalGrowthRate(DTR, r.TRANRF, NNI)
+        r.RGROWTH = self.totalGrowthRate(DTR, r.TRANRF, NNI)
 
         # Leaf totalGrowthRate and LAI.
-        GLV    = FLV * RGROWTH
+        GLV    = FLV * r.RGROWTH
 
         # daily increase of leaf area index.
         GLAI = self._growth_leaf_area(DTEFF, self.LAII, DELT, SLA, GLV, WC, DVS, r.TRANRF, NNI)
 
         # relative deathOfLeaves rate of leaves.
-        DLV, DLAI = self.deathRateOfLeaves(TSUM, RDRTMP, NNI, SLA)
+        r.DLV, DLAI = self.deathRateOfLeaves(TSUM, RDRTMP, NNI, SLA)
 
         # Net rate of change of Leaf area.
-        RLAI   = GLAI - DLAI
+        r.RLAI   = GLAI - DLAI
 
         # Root totalGrowthRate
         """
@@ -543,13 +575,13 @@ class Lintul3(SimulationObject):
         r.RROOTD = min(p.RRDMAX,  p.ROOTDM - s.ROOTD) if (WC > p.WCWP) else 0.0
 
         # N loss due to deathOfLeaves of leaves and roots.
-        DRRT = 0. if (DVS < p.DVSDR) else s.WRT * p.RDRRT
-        RNLDLV = p.RNFLV * DLV
-        RNLDRT = p.RNFRT * DRRT
+        r.DRRT = 0. if (DVS < p.DVSDR) else s.WRT * p.RDRRT
+        r.RNLDLV = p.RNFLV * r.DLV
+        r.RNLDRT = p.RNFRT * r.DRRT
 
         # relative totalGrowthRate rate of roots, leaves, stem
         # and storage organs.
-        RWLVG, RWRT, RWST, RWSO = self.relativeGrowthRates(RGROWTH, FLV, FRT, FST, FSO, DLV, DRRT)
+        r.RWLVG, r.RWRT, r.RWST, r.RWSO = self.relativeGrowthRates(r.RGROWTH, FLV, FRT, FST, FSO, r.DLV, r.DRRT, s.WREALOC)
 
 
         """
@@ -580,7 +612,7 @@ class Lintul3(SimulationObject):
         NSUPSO  = ATN / p.TCNT if (DVS > p.DVSNT) else 0.0
 
         # Rate of N uptake in grains.
-        RNSO    =  min(NDEMSO, NSUPSO)
+        r.RNSO    =  min(NDEMSO, NSUPSO)
 
         # Total Nitrogen demand.
         NDEMTO  = max(0.0, (NDEMLV + NDEMST + NDEMRT))
@@ -601,21 +633,21 @@ class Lintul3(SimulationObject):
         #  uptake from the soil anymore.
         NLIMIT  = 1.0 if (DVS < p.DVSNLT) and (WC >= p.WCWP) else 0.0
 
-        NUPTR   = (max(0., min(NDEMTO, s.TNSOIL))* NLIMIT ) / DELT
+        r.NUPTR   = (max(0., min(NDEMTO, k.TNSOIL))* NLIMIT ) / DELT
 
         # N translocated from leaves, stem, and roots.
-        RNTLV   = RNSO* ATNLV/ ATN
-        RNTST   = RNSO* ATNST/ ATN
-        RNTRT   = RNSO* ATNRT/ ATN
+        RNTLV   = r.RNSO* ATNLV/ ATN
+        RNTST   = r.RNSO* ATNST/ ATN
+        RNTRT   = r.RNSO* ATNRT/ ATN
 
         # compute the partitioning of the total N uptake rate (NUPTR) over the leaves, stem and roots.
-        RNULV, RNUST, RNURT = self.N_uptakeRates(NDEMLV, NDEMST, NDEMRT, NUPTR, NDEMTO)
+        RNULV, RNUST, RNURT = self.N_uptakeRates(NDEMLV, NDEMST, NDEMRT, r.NUPTR, NDEMTO)
 
-        RNST    = RNUST-RNTST
-        RNRT    = RNURT-RNTRT-RNLDRT
+        r.RNST    = RNUST-RNTST
+        r.RNRT    = RNURT-RNTRT-r.RNLDRT
 
         # Rate of change of N in organs
-        RNLV    = RNULV-RNTLV-RNLDLV
+        r.RNLV    = RNULV-RNTLV-r.RNLDLV
 
         # ****************SOIL NITROGEN SUPPLY***********************************
         """
@@ -636,8 +668,8 @@ class Lintul3(SimulationObject):
 
         #  Change in inorganic N in soil as function of fertilizer
         #  input, soil N mineralization and crop uptake.
-        RNSOIL = self.FERTNS/DELT - NUPTR + p.RNMIN
-        self.FERTNS = 0.0
+        ##r.RNSOIL = self.FERTNS/DELT - r.NUPTR + p.RNMIN
+        #self.FERTNS = 0.0
 
         # # Total leaf weight.
         WLV     = s.WLVG + s.WLVD
@@ -648,25 +680,6 @@ class Lintul3(SimulationObject):
 
         NBALAN = (s.NUPTT + (self.ANLVI + self.ANSTI + self.ANRTI + self.ANSOI)
                   - (s.ANLV + s.ANST + s.ANRT + s.ANSO + s.NLOSSL + s.NLOSSR))
-
-        s.rLAI    = RLAI
-        s.rANLV   = RNLV
-        s.rANST   = RNST
-        s.rANRT   = RNRT
-        s.rANSO   = RNSO
-        s.rNUPTT  = NUPTR
-        s.rNLOSSL = RNLDLV
-        s.rNLOSSR = RNLDRT
-        s.rWLVG   = RWLVG
-        s.rWLVD   = DLV
-        s.rWST    = RWST
-        s.rWSO    = RWSO
-        s.rWRT    = RWRT
-        s.rROOTD  = r.RROOTD
-        s.rTGROWTH = RGROWTH
-        s.rWDRT   = DRRT
-        s.rCUMPAR = PAR
-        s.rTNSOIL = RNSOIL
 
         if abs(NBALAN) > 0.0001:
             raise NutrientBalanceError("Nitrogen un-balance in crop model at day %s" % day)
@@ -686,9 +699,28 @@ class Lintul3(SimulationObject):
             self.touch()
             return
 
-        # run automatic integration on states object.
+        r = self.rates
         s = self.states
-        s.integrate(delta=1.)
+
+        s.LAI += r.RLAI
+        s.ANLV += r.RNLV
+        s.ANST += r.RNST
+        s.ANRT += r.RNRT
+        s.ANSO += r.RNSO
+        s.NUPTT += r.NUPTR
+        s.NLOSSL += r.RNLDLV
+        s.NLOSSR += r.RNLDRT
+        s.WLVG += r.RWLVG
+        s.WLVD += r.DLV
+        s.WST += r.RWST
+        s.WSO += r.RWSO
+        s.WRT += r.RWRT
+        s.ROOTD += r.RROOTD
+        s.TGROWTH += r.RGROWTH
+        s.WDRT += r.DRRT
+        s.CUMPAR += r.PAR
+        s.WREALOC += r.RWREALOC
+        #s.TNSOIL += r.RNSOIL
 
         # Compute some derived states
         s.TAGBM = s.WLVG + s.WLVD + s.WST + s.WSO
@@ -738,6 +770,27 @@ class Lintul3(SimulationObject):
                 FR = limit( 0., 1., (p.WCST - WC)/(p.WCST - p.WCWET))
         
         return PTRAN * FR
+
+    def _calc_retranslocatable_stem_dry_matter(self, WREALOC):
+        k = self.kiosk
+        p = self.params
+        s = self.states
+
+        if k.DVS < p.REALLOC_DVS:
+            REALLOC_RATE = 0.
+            pass
+        else:
+            if self._WST_REALLOC is None:
+                self._WST_REALLOC = s.WST * p.REALLOC_FRAC
+                s.WREALLOC = self._WST_REALLOC
+            REALLOC_RATE = max(self._WST_REALLOC * p.REALLOC_RATE_REL, WREALOC)
+        return REALLOC_RATE
+
+    def _calc_lue_corrected_for_CO2(self):
+        p = self.params
+        f_CO2 = ((- 1.7/(350* (1-1.7))) * p.CO2 * 1.7 )/ ((- 1.7/(350* (1-1.7))) * p.CO2 + 1.7 )
+        LUE_corr = p.LUE * f_CO2
+        return LUE_corr
 
     def _growth_leaf_area(self, DTEFF, LAII,  DELT, SLA, GLV, WC, DVS, TRANRF, NNI):
         """This subroutine computes daily increase of leaf area index."""
@@ -805,7 +858,12 @@ class Lintul3(SimulationObject):
         """
         p = self.params
         PARINT = 0.5 * DTR * (1.- exp(-p.K * self.states.LAI))
-        RGROWTH = p.LUE * PARINT
+
+        if(p.ICO2 == 0):
+            RGROWTH = p.LUE * PARINT
+        else:
+            LUE_CO2_corr = self._calc_lue_corrected_for_CO2()
+            RGROWTH = LUE_CO2_corr * PARINT
         
         if(TRANRF  <=  NNI):
             #  Water stress is more severe as compared to nitrogen stress and
@@ -817,17 +875,19 @@ class Lintul3(SimulationObject):
             RGROWTH *= exp(-p.NLUE * (1.0 - NNI))
         return RGROWTH
 
-    def relativeGrowthRates(self, RGROWTH, FLV, FRT, FST, FSO, DLV, DRRT):
+    def relativeGrowthRates(self, RGROWTH, FLV, FRT, FST, FSO, DLV, DRRT, WREALOC):
         """
         compute the relative totalGrowthRate rate of roots, leaves, stem 
         and storage organs.
         Obsolete subroutine name: RELGR                   
         """
+        r = self.rates
+        r.RWREALOC = -self._calc_retranslocatable_stem_dry_matter(WREALOC)
       
         RWLVG = RGROWTH * FLV - DLV
         RWRT  = RGROWTH * FRT - DRRT
-        RWST  = RGROWTH * FST
-        RWSO  = RGROWTH * FSO
+        RWST  = RGROWTH * FST  + r.RWREALOC
+        RWSO  = RGROWTH * FSO - r.RWREALOC
 
         return RWLVG, RWRT, RWST, RWSO
 
